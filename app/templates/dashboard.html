@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="CheckStock — управление остатками и отправками FBS/FBO">
+  <title>CheckStock — складской учёт</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="{{ url_for('static', path='/css/app.css') }}" rel="stylesheet">
+</head>
+<body>
+<div class="app-shell">
+  <aside class="sidebar" id="sidebar">
+    <a href="/" class="brand text-decoration-none"><span class="brand-icon">▦</span><span>CheckStock <small>WAREHOUSE</small></span></a>
+    <div class="sidebar-caption">УПРАВЛЕНИЕ</div>
+    <nav class="nav flex-column app-nav" aria-label="Разделы">
+      <button class="nav-link active" type="button" data-view="overview"><span class="nav-symbol">◫</span> Обзор</button>
+      <button class="nav-link" type="button" data-view="inventory"><span class="nav-symbol">▤</span> Остатки и товары</button>
+      <button class="nav-link" type="button" data-view="warehouses"><span class="nav-symbol">⌂</span> Склады</button>
+      <button class="nav-link" type="button" data-view="transfers"><span class="nav-symbol">⇄</span> Перемещения</button>
+      <button class="nav-link" type="button" data-view="fbs"><span class="nav-symbol">◧</span> Заказы FBS</button>
+      <button class="nav-link" type="button" data-view="fbo"><span class="nav-symbol">▣</span> Отправки FBO</button>
+      <button class="nav-link" type="button" data-view="history"><span class="nav-symbol">◷</span> История</button>
+    </nav>
+    <div class="sidebar-bottom"><span class="status-dot"></span> PostgreSQL · FastAPI<br><span class="small text-muted">Тестовый прототип</span></div>
+  </aside>
+
+  <div class="workspace">
+    <header class="topbar d-flex justify-content-between align-items-center">
+      <div class="d-flex align-items-center gap-3"><button type="button" class="btn btn-sm btn-outline-secondary d-lg-none" id="menu-toggle" aria-label="Открыть меню">☰</button><span class="topbar-title" id="current-title">Обзор</span></div>
+      <div class="d-flex gap-2 align-items-center"><span class="topbar-date d-none d-sm-inline">Учёт фулфилмента</span><button type="button" class="btn btn-sm btn-outline-secondary" id="refresh-btn">↻ Обновить</button></div>
+    </header>
+    <main class="content">
+      <div class="alert alert-danger d-none" role="alert" id="global-error"></div>
+      <section id="view-overview" class="app-view">
+        <div class="page-head"><div><div class="eyebrow">ОПЕРАТИВНАЯ СВОДКА</div><h1>Где сейчас товар?</h1><p>Все остатки, резервы и отправки — в одном месте.</p></div><button class="btn btn-primary" data-operation="receipt">+ Оформить приход</button></div>
+        <div class="row g-3 mb-4">
+          <div class="col-6 col-xl-3"><div class="metric-card"><div class="metric-label">Физически на ФФ</div><div class="metric-number" id="total-on-hand">—</div><div class="metric-foot">Единиц на складах</div></div></div>
+          <div class="col-6 col-xl-3"><div class="metric-card"><div class="metric-label">Доступно</div><div class="metric-number" id="total-available">—</div><div class="metric-foot">Можно отгрузить</div></div></div>
+          <div class="col-6 col-xl-3"><div class="metric-card"><div class="metric-label">Резерв FBS</div><div class="metric-number" id="total-reserved">—</div><div class="metric-foot">Отложено для заказов</div></div></div>
+          <div class="col-6 col-xl-3"><div class="metric-card"><div class="metric-label">Всего в пути</div><div class="metric-number" id="total-transit">—</div><div class="metric-foot">FF / FBS / FBO</div></div></div>
+        </div>
+        <div class="row g-3 mb-4">
+          <div class="col-lg-7"><div class="panel h-100"><div class="panel-head"><h2>Товары по складам</h2><button class="btn btn-outline-primary btn-sm" data-go="inventory">Все остатки</button></div><div class="table-responsive"><table class="table table-hover mb-0"><thead><tr><th>Артикул</th><th>Склад</th><th class="text-end">На ФФ</th><th class="text-end">Доступно</th></tr></thead><tbody id="overview-inventory"></tbody></table></div></div></div>
+          <div class="col-lg-5"><div class="panel h-100"><div class="panel-head"><h2>Товар в пути</h2></div><div class="px-4 pb-4 pt-2"><div class="transit-row"><span>⇄ Между складами</span><strong id="transit-ff">—</strong></div><div class="transit-row"><span>◧ К клиенту (FBS)</span><strong id="transit-fbs">—</strong></div><div class="transit-row"><span>▣ На маркетплейс (FBO)</span><strong id="transit-fbo">—</strong></div><div class="transit-row"><span>✓ Принято маркетплейсом</span><strong id="received-fbo">—</strong></div><hr><div class="fw-semibold mb-3">Быстрые действия</div><div class="d-grid gap-2"><button class="btn btn-outline-primary text-start" data-operation="transfer">⇄ Переместить между ФФ</button><button class="btn btn-outline-primary text-start" data-operation="reserve">◧ Создать резерв FBS</button><button class="btn btn-outline-primary text-start" data-operation="fbo">▣ Отправить на FBO</button></div></div></div></div>
+        </div>
+        <div class="panel"><div class="panel-head"><h2>Последние операции</h2><button class="btn btn-outline-primary btn-sm" data-go="history">Вся история</button></div><div class="table-responsive"><table class="table table-hover mb-0"><thead><tr><th>Дата</th><th>Артикул</th><th>Операция</th><th class="text-end">Шт.</th><th>Маршрут</th></tr></thead><tbody id="overview-movements"></tbody></table></div></div>
+      </section>
+
+      <section id="view-inventory" class="app-view d-none">
+        <div class="page-head"><div><div class="eyebrow">СКЛАДСКИЕ ОСТАТКИ</div><h1>Товары и остатки</h1><p>Физическое количество, резерв и доступный остаток по каждому ФФ.</p></div><div class="d-flex gap-2 flex-wrap"><button class="btn btn-outline-primary" data-operation="product">+ Товар</button><button class="btn btn-primary" data-operation="receipt">+ Приход</button></div></div>
+        <div class="panel"><div class="panel-head flex-wrap gap-3"><h2>Остатки по артикулам</h2><input id="inventory-search" class="form-control form-control-sm search" type="search" placeholder="Поиск по артикулу или названию" aria-label="Поиск по товарам"></div><div class="table-responsive"><table class="table table-hover mb-0"><thead><tr><th>Артикул</th><th>Наименование</th><th>ФФ</th><th class="text-end">Физически</th><th class="text-end">Резерв FBS</th><th class="text-end">Доступно</th></tr></thead><tbody id="inventory-rows"></tbody></table></div></div>
+      </section>
+
+      <section id="view-warehouses" class="app-view d-none"><div class="page-head"><div><div class="eyebrow">СПРАВОЧНИКИ</div><h1>Склады фулфилмента</h1><p>Архивирование сохраняет существующие остатки и историю.</p></div><button class="btn btn-primary" data-operation="warehouse">+ Добавить склад</button></div><div class="panel"><div class="table-responsive"><table class="table table-hover mb-0"><thead><tr><th>Код</th><th>Название</th><th>Статус</th><th class="text-end">Физически, шт.</th><th class="text-end">Действия</th></tr></thead><tbody id="warehouse-rows"></tbody></table></div></div></section>
+
+      <section id="view-transfers" class="app-view d-none"><div class="page-head"><div><div class="eyebrow">ЛОГИСТИКА</div><h1>Перемещения ФФ → ФФ</h1><p>Списание со склада отправления и приёмка на складе назначения — отдельные действия.</p></div><button class="btn btn-primary" data-operation="transfer">+ Перемещение</button></div><div class="panel"><div class="table-responsive"><table class="table table-hover mb-0"><thead><tr><th>№</th><th>Артикул</th><th>Маршрут</th><th class="text-end">Шт.</th><th>Статус</th><th class="text-end">Действие</th></tr></thead><tbody id="transfer-rows"></tbody></table></div></div></section>
+
+      <section id="view-fbs" class="app-view d-none"><div class="page-head"><div><div class="eyebrow">ОТГРУЗКИ КЛИЕНТАМ</div><h1>Резервы и заказы FBS</h1><p>Резерв блокирует доступные единицы до отмены или отправки заказа.</p></div><button class="btn btn-primary" data-operation="reserve">+ Создать резерв</button></div><div class="panel"><div class="table-responsive"><table class="table table-hover mb-0"><thead><tr><th>№</th><th>Заказ</th><th>Артикул</th><th>Склад</th><th class="text-end">Шт.</th><th>Статус</th><th class="text-end">Действия</th></tr></thead><tbody id="fbs-rows"></tbody></table></div></div></section>
+
+      <section id="view-fbo" class="app-view d-none"><div class="page-head"><div><div class="eyebrow">ОТГРУЗКИ НА МАРКЕТПЛЕЙС</div><h1>Отправки FBO</h1><p>После отправки товар учитывается в пути до подтверждения приёмки маркетплейсом.</p></div><button class="btn btn-primary" data-operation="fbo">+ Отправить FBO</button></div><div class="panel"><div class="table-responsive"><table class="table table-hover mb-0"><thead><tr><th>№</th><th>Артикул</th><th>Со склада</th><th>Маркетплейс</th><th class="text-end">Шт.</th><th>Статус</th><th class="text-end">Действие</th></tr></thead><tbody id="fbo-rows"></tbody></table></div></div></section>
+
+      <section id="view-history" class="app-view d-none"><div class="page-head"><div><div class="eyebrow">АУДИТ ОПЕРАЦИЙ</div><h1>История движений</h1><p>Что, откуда и куда переместилось. Новые записи — сверху.</p></div></div><div class="panel"><div class="table-responsive"><table class="table table-hover mb-0"><thead><tr><th>Дата</th><th>Артикул</th><th>Операция</th><th class="text-end">Шт.</th><th>Откуда</th><th>Куда</th></tr></thead><tbody id="history-rows"></tbody></table></div></div></section>
+
+      <footer class="footer-line">CheckStock · учебный прототип · <a href="/docs" target="_blank" rel="noopener noreferrer">Swagger API</a> · <a href="/health/db" target="_blank" rel="noopener noreferrer">Проверка БД</a></footer>
+    </main>
+  </div>
+</div>
+
+<div class="modal fade" id="operation-modal" tabindex="-1" aria-labelledby="operation-title" aria-hidden="true"><div class="modal-dialog modal-dialog-centered"><div class="modal-content"><form id="operation-form"><div class="modal-header"><h2 class="modal-title fs-5" id="operation-title">Операция</h2><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button></div><div class="modal-body"><p class="text-secondary small" id="operation-description"></p><div id="operation-fields"></div><div class="alert alert-danger d-none" id="form-error" role="alert"></div></div><div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Отмена</button><button type="submit" class="btn btn-primary" id="operation-submit">Сохранить</button></div></form></div></div></div>
+<div class="toast-container position-fixed bottom-0 end-0 p-3"><div class="toast align-items-center text-bg-dark border-0" id="app-toast" role="status" aria-live="polite"><div class="d-flex"><div class="toast-body" id="toast-message"></div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Закрыть"></button></div></div></div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script defer src="{{ url_for('static', path='/js/app.js') }}"></script>
+</body>
+</html>
